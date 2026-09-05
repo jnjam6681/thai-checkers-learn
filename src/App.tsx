@@ -33,6 +33,18 @@ export default function App() {
   const text = match.textAt(state.viewIndex)
   const a = ply?.analysis ?? null
   const busy = state.phase === 'connecting' || state.phase === 'thinking'
+  const gameLive = busy || state.phase === 'ready'
+
+  /**
+   * เกมของ hosbase เปิดแล้วเปลี่ยนฝ่ายที่เดินก่อนกลางคันไม่ได้ ถ้ากำลังเล่นอยู่
+   * การกดสลับฝ่ายจึงเป็นการเริ่มเกมใหม่ทันที ไม่งั้นปุ่มจะกดได้แต่ไม่มีผล
+   * ซึ่งชวนงงกว่ามาก
+   */
+  const pickFirstMover = (s: Side) => {
+    if (s === firstMover) return
+    setFirstMover(s)
+    if (gameLive) void match.start(s)
+  }
   const live = state.plies.length - 1
   const atLive = state.viewIndex >= live
   const started = state.phase !== 'idle'
@@ -120,14 +132,17 @@ export default function App() {
           className="seg"
           role="group"
           aria-label="ใครเดินก่อน"
-          title="hosbase ล็อกให้ดำเดินก่อนเสมอ เกมขาวเดินก่อนคือกระดานเดียวกันหมุน 180 องศา"
+          title={
+            'เลือกฝ่ายที่เดินก่อน — ถ้ากำลังเล่นอยู่ การสลับฝ่ายจะเริ่มเกมใหม่ทันที (ใช้โควตา 2 เกม)\n' +
+            'hosbase ล็อกให้ดำเดินก่อนเสมอ เกมขาวเดินก่อนคือกระดานเดียวกันหมุน 180 องศา'
+          }
         >
           <span className="seg-label">เดินก่อน</span>
           {([BLACK, WHITE] as Side[]).map((s) => (
             <button
               key={s}
               className={`seg-btn ${firstMover === s ? 'on' : ''}`}
-              onClick={() => setFirstMover(s)}
+              onClick={() => pickFirstMover(s)}
               disabled={busy}
             >
               <span className={`pip ${s === WHITE ? 'w' : 'b'}`} />
@@ -143,19 +158,6 @@ export default function App() {
             หยุด
           </button>
         )}
-      </div>
-
-      <div className={`status ${state.error ? 'error' : state.result ? 'result' : 'info'}`}>
-        <span className="status-main">
-          {busy && <span className="spinner" aria-hidden />}
-          {state.error ?? state.result ?? state.message}
-        </span>
-        <span className="status-meta">
-          {started && `ฝ่าย${sideName(state.firstMover)}เดินก่อน · `}
-          เดินแล้ว {state.plies.length} ตา
-          {state.noProgress > 0 && ` · นิ่ง ${state.noProgress} ตา`}
-          {started && firstMover !== state.firstMover && ' · กด “เริ่มใหม่” เพื่อสลับ'}
-        </span>
       </div>
 
       <main className="grid">
@@ -209,6 +211,18 @@ export default function App() {
         </section>
 
         <section className="side">
+          <div className={`status ${state.error ? 'error' : state.result ? 'result' : 'info'}`}>
+            <span className="status-main" title={state.error ?? state.result ?? state.message}>
+              {busy && <span className="spinner" aria-hidden />}
+              {state.error ?? state.result ?? state.message}
+            </span>
+            <span className="status-meta">
+              {started && `ฝ่าย${sideName(state.firstMover)}เดินก่อน · `}
+              เดินแล้ว {state.plies.length} ตา
+              {state.noProgress > 0 && ` · นิ่ง ${state.noProgress} ตา`}
+            </span>
+          </div>
+
           <div className="card analysis">
             {a && ply ? (
               <>
@@ -267,8 +281,8 @@ export default function App() {
                 </span>
                 <h2>ยังไม่มีตาเดิน</h2>
                 <p>
-                  กด <b>เริ่มเกม</b> แล้วกด <b>▶</b> ทีละตา ระบบจะเทียบตาที่เอนจินเลือกกับตาอื่นที่เดินได้
-                  แล้วอธิบายว่าทำไมตานั้นถึงน่าเดิน
+                  กด <b>เริ่มเกม</b> แล้วกด <b>▶</b> ทีละตา ระบบจะสรุปว่าตานั้นเกิดอะไรขึ้นบนกระดาน —
+                  บังคับไหม กินอะไร อีกฝ่ายถูกบังคับให้กินอะไรต่อ และตานั้นมีอะไรให้เลือกอีกบ้าง
                 </p>
                 <p className="kbd-hint">
                   <kbd>←</kbd> <kbd>→</kbd> เดินหน้าถอยหลังได้จากคีย์บอร์ด

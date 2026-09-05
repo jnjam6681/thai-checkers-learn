@@ -34,6 +34,13 @@
   --sans: 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
   --r: 12px;
+
+  /* ความกว้างคอลัมน์ซ้าย และความสูงที่มันจะได้ออกมา
+     = ขอบใน 12*2 + ป้ายผู้เล่น 40*2 + ระยะกระดาน 4*2 + ระยะปุ่ม 4 + แถวปุ่ม 44
+       + กระดานซึ่งเป็นสี่เหลี่ยมจัตุรัสกว้างเท่าคอลัมน์ลบขอบใน
+     คอลัมน์ขวาผูกความสูงกับค่านี้ กรอบล่างสองฝั่งจะได้ตรงกันเป๊ะโดยไม่ต้องจูนมือ */
+  --col: 480px;
+  --col-h: calc(var(--col) + 136px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -125,7 +132,7 @@ body {
 .btn.icon.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 select { padding: 8px 10px; }
 
-.setup { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
+.setup { display: flex; align-items: center; gap: 10px; margin: 20px 0 18px; }
 .spacer { flex: 1; }
 
 .seg {
@@ -144,17 +151,24 @@ select { padding: 8px 10px; }
 .pip.b { background: linear-gradient(160deg, #45525f, #1b232e); border: 1px solid #0f151d; }
 
 /* ---------------------------------------------------------------- status -- */
+/* ความสูงตายตัว ข้อความยาวแค่ไหนก็ตัดที่สองบรรทัด (ตัวเต็มอยู่ใน title)
+   อยู่ในคอลัมน์แคบแล้วถ้าปล่อยให้สูงตามข้อความ กล่องข้างล่างจะเด้งทุกครั้ง
+   ที่ข้อความเปลี่ยนความยาว */
 .status {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  min-height: 46px; padding: 8px 16px; border-radius: var(--r); margin-bottom: 18px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex: none; height: 62px; padding: 8px 16px; border-radius: var(--r);
   font-size: 13.5px; background: var(--surface); border: 1px solid var(--border);
 }
 .status.error { background: var(--danger-soft); border-color: var(--danger); }
 .status.result { background: var(--good-soft); border-color: var(--good); }
-.status-main { display: flex; align-items: center; gap: 10px; }
-.status-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.status-main {
+  min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.status-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; flex: none; }
 
 .spinner {
+  display: inline-block; vertical-align: -2px; margin-right: 8px;
   width: 14px; height: 14px; flex: none; border-radius: 50%;
   border: 2px solid var(--border-2); border-top-color: var(--accent);
   animation: spin .7s linear infinite;
@@ -163,8 +177,7 @@ select { padding: 8px 10px; }
 
 /* ------------------------------------------------------------------ grid -- */
 /* คอลัมน์ซ้ายกว้างตายตัว กระดานจะได้ไม่เปลี่ยนขนาดระหว่างเดิน */
-.grid { display: grid; grid-template-columns: 480px minmax(0, 1fr); gap: 20px; align-items: start; }
-@media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.grid { display: grid; grid-template-columns: var(--col) minmax(0, 1fr); gap: 20px; align-items: start; }
 
 .board-card, .card {
   background: var(--surface); border: 1px solid var(--border);
@@ -247,12 +260,12 @@ select { padding: 8px 10px; }
 .toggle input { accent-color: var(--accent); margin: 0; }
 
 /* ------------------------------------------------------------ คำวิเคราะห์ -- */
-.side { display: flex; flex-direction: column; gap: 16px; }
+.side { display: flex; flex-direction: column; gap: 16px; height: var(--col-h); }
 .card { padding: 16px 18px; }
 
 /* ความสูงตายตัว + เลื่อนข้างใน เพราะจำนวนบรรทัดคำอธิบายเปลี่ยนทุกตา
    ถ้าปล่อยให้สูงตามเนื้อหา กล่องข้างล่างจะเด้งขึ้นลงทุกครั้งที่เดิน */
-.analysis { height: 304px; overflow-y: auto; }
+.analysis { flex: 1; min-height: 0; overflow-y: auto; }
 
 .card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .card-head h2 { margin: 0; font-size: 15.5px; font-weight: 600; }
@@ -302,13 +315,13 @@ kbd {
 }
 
 /* --------------------------------------------------------- ลำดับตาเดิน -- */
-.moves { padding: 12px 12px 14px; }
+.moves { flex: none; padding: 12px 12px 14px; }
 .moves-head, .moves-row { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items: center; }
 .moves-head {
   font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .02em;
   padding: 0 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
 }
-.moves-body { height: 236px; overflow-y: auto; padding: 0 2px; }
+.moves-body { height: 170px; overflow-y: auto; padding: 0 2px; }
 .moves-row { padding: 1px 0; }
 .moves-row .no {
   font-family: var(--mono); font-size: 11.5px; color: var(--muted);
@@ -330,3 +343,12 @@ kbd {
 .tag.gold { background: var(--gold-soft); color: var(--gold); }
 .muted { color: var(--muted); }
 .pad { padding: 8px 6px; font-size: 13px; }
+
+/* ---------------------------------------------------------------- จอแคบ --
+   ต้องอยู่ท้ายไฟล์ ไม่งั้นกฎ .side / .analysis ข้างบนที่ specificity เท่ากัน
+   จะมาทับทีหลังแล้วการซ้อนคอลัมน์ก็ไม่ทำงาน */
+@media (max-width: 1000px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .side { height: auto; }
+  .analysis { flex: none; height: 320px; }
+}
