@@ -1,0 +1,26 @@
+{
+  "name": "thai-chest-learn",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test:logic": "esbuild test/logic.test.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/logic.mjs && node node_modules/.cache/logic.mjs",
+    "test:match": "esbuild test/match.test.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/match.mjs && node node_modules/.cache/match.mjs",
+    "test:endgame": "esbuild test/endgame.test.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/endgame.mjs && node node_modules/.cache/endgame.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

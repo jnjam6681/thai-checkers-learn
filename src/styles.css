@@ -1,0 +1,332 @@
+/* ============================================================================
+   โทเคนสี — ตามธีมของเครื่อง (สว่าง/มืด) สีกระดานคงที่ทั้งสองธีม
+   ========================================================================== */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f7f9fc;
+  --border: #e4e9f0;
+  --border-2: #d3dbe6;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #4c6ef5;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(76, 110, 245, 0.1);
+  --good: #12855a;
+  --good-soft: rgba(18, 133, 90, 0.12);
+  --danger: #d93f34;
+  --danger-soft: rgba(217, 63, 52, 0.12);
+  --gold: #b8860b;
+  --gold-soft: rgba(184, 134, 11, 0.14);
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 8px 24px -12px rgba(16, 24, 40, 0.18);
+
+  --sq-light: #e9edf3;
+  --sq-dark: #8ba1bb;
+  /* ไฮไลต์ใช้สีทึบคนละค่าบนช่องสว่างกับช่องเข้ม ถ้าใช้สีโปร่งใสค่าเดียว
+     ทับสองสีนี้แล้วจะออกมาคนละโทน (ช่องเข้มจะกลายเป็นเขียวขี้ม้า) */
+  --hl-l: #f4d97b;
+  --hl-d: #c9a94e;
+  --hl-ring: #f0b429;
+  --cap-l: #f2b5af;
+  --cap-d: #c2837c;
+  --cap-ring: #e5484d;
+
+  --sans: 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --r: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --surface: #151b23;
+    --surface-2: #1b222c;
+    --border: #242d38;
+    --border-2: #313c4a;
+    --text: #e6edf3;
+    --muted: #8b98a8;
+    --accent: #6b8dff;
+    --accent-ink: #0b1020;
+    --accent-soft: rgba(107, 141, 255, 0.14);
+    --good: #3fb984;
+    --good-soft: rgba(63, 185, 132, 0.14);
+    --danger: #ff6b5e;
+    --danger-soft: rgba(255, 107, 94, 0.14);
+    --gold: #e8b93f;
+    --gold-soft: rgba(232, 185, 63, 0.16);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+    /* หรี่กระดานลงหน่อยในธีมมืด ไม่งั้นแผ่นขาวสว่างจ้าเกิน */
+    --sq-light: #d6dee9;
+    --sq-dark: #7b8fa8;
+    color-scheme: dark;
+  }
+  .pip.b { border-color: #5d6a7a; }
+  .piece.b { border-color: #0b1119;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* จองที่ให้ scrollbar ไว้เลย ไม่งั้นพอเนื้อหายาวจนมี scrollbar โผล่ ความกว้าง
+   ทั้งหน้าจะหด กระดานย่อลงหนึ่งเฟรมแล้วเด้งกลับ = อาการกระพริบ */
+html { scrollbar-gutter: stable; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14.5px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { max-width: 1120px; margin: 0 auto; padding: 28px 20px 64px; }
+
+/* ---------------------------------------------------------------- topbar -- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand .logo {
+  width: 42px; height: 42px; flex: none; border-radius: 11px;
+  display: grid; place-items: center; font-size: 20px;
+  background: var(--accent); color: var(--accent-ink);
+}
+.brand h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+.brand p { margin: 0; font-size: 13px; color: var(--muted); }
+
+.quota {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 7px 14px 7px 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.quota-n { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.quota-l { font-size: 10.5px; line-height: 1.25; color: var(--muted); }
+
+/* ----------------------------------------------------------------- ปุ่ม -- */
+.btn, .seg-btn, select, .toggle {
+  font: inherit; font-size: 14px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 14px; cursor: pointer;
+  transition: background .13s ease, border-color .13s ease, color .13s ease;
+}
+.btn:hover:not(:disabled), .seg-btn:hover:not(:disabled), select:hover, .toggle:hover {
+  background: var(--surface-2); border-color: var(--border-2);
+}
+.btn:disabled { opacity: .38; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.07); }
+.btn.ghost { background: transparent; }
+.btn.icon {
+  width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
+  font-size: 13px; line-height: 1;
+}
+/* ทุกอย่างในแถวควบคุมสูงเท่ากันหมด ไม่งั้นแถวเบี้ยว */
+.playback .btn, .playback select, .playback .toggle { height: 38px; }
+.btn.icon.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+select { padding: 8px 10px; }
+
+.setup { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
+.spacer { flex: 1; }
+
+.seg {
+  display: flex; align-items: center; gap: 4px; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
+}
+.seg-label { font-size: 12.5px; color: var(--muted); padding: 0 8px 0 6px; }
+.seg-btn {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 5px 12px;
+}
+.seg-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.pip { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; }
+.pip.w { background: linear-gradient(160deg, #fff, #dfe5ee); border: 1px solid #b9c4d2; }
+.pip.b { background: linear-gradient(160deg, #45525f, #1b232e); border: 1px solid #0f151d; }
+
+/* ---------------------------------------------------------------- status -- */
+.status {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 46px; padding: 8px 16px; border-radius: var(--r); margin-bottom: 18px;
+  font-size: 13.5px; background: var(--surface); border: 1px solid var(--border);
+}
+.status.error { background: var(--danger-soft); border-color: var(--danger); }
+.status.result { background: var(--good-soft); border-color: var(--good); }
+.status-main { display: flex; align-items: center; gap: 10px; }
+.status-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+
+.spinner {
+  width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border-2); border-top-color: var(--accent);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------------------------------------------ grid -- */
+/* คอลัมน์ซ้ายกว้างตายตัว กระดานจะได้ไม่เปลี่ยนขนาดระหว่างเดิน */
+.grid { display: grid; grid-template-columns: 480px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.board-card, .card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: var(--shadow);
+}
+.board-card { padding: 12px; }
+
+/* ป้ายผู้เล่น — ความสูงคงที่ ไม่ว่าจะถึงตาใคร */
+.plate {
+  display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 12px;
+  border-radius: 10px; font-size: 13.5px;
+  transition: background .15s ease;
+}
+.plate.active { background: var(--accent-soft); }
+.pname { font-weight: 600; }
+.pstat { color: var(--muted); font-size: 12.5px; }
+.turnbadge {
+  margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink);
+  opacity: 0; transition: opacity .15s ease;
+}
+.plate.active .turnbadge { opacity: 1; }
+
+/* --------------------------------------------------------------- กระดาน -- */
+.board {
+  display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+  aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+  margin: 4px 0; user-select: none;
+}
+.cell { position: relative; display: grid; place-items: center; }
+.cell.light { background: var(--sq-light); }
+.cell.dark { background: var(--sq-dark); }
+
+.coord {
+  position: absolute; font-size: 9.5px; font-weight: 600; line-height: 1;
+  opacity: .55; pointer-events: none;
+}
+.cell.light .coord { color: #46566b; }
+.cell.dark .coord { color: #f2f6fa; }
+.coord.rank { top: 4px; left: 5px; }
+.coord.file { bottom: 4px; right: 5px; }
+.coord.sq { top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 10px; opacity: .5; }
+
+/* ไฮไลต์ตาล่าสุด: ต้นทาง กลางทาง ปลายทาง สีเดียวกัน ปลายทางเพิ่มขอบ */
+.cell.light.from, .cell.light.via, .cell.light.to { background: var(--hl-l); }
+.cell.dark.from, .cell.dark.via, .cell.dark.to { background: var(--hl-d); }
+.cell.to { box-shadow: inset 0 0 0 3px var(--hl-ring); }
+.cell.light.cap { background: var(--cap-l); }
+.cell.dark.cap { background: var(--cap-d); }
+.cell.cap { box-shadow: inset 0 0 0 3px var(--cap-ring); }
+
+.piece {
+  position: relative; width: 76%; aspect-ratio: 1; border-radius: 50%;
+  display: grid; place-items: center;
+  box-shadow: 0 2px 4px rgba(10, 20, 35, 0.28);
+}
+.piece.w { background: linear-gradient(163deg, #ffffff, #dde3ec); border: 1.5px solid #aab6c6; }
+.piece.b { background: linear-gradient(163deg, #46536280, #1a222c), #222a36; border: 1.5px solid #0e141d; }
+.crown { font-size: 13px; font-weight: 700; line-height: 1; }
+.piece.w .crown { color: #9a7b1f; }
+.piece.b .crown { color: var(--gold); }
+
+/* ---------------------------------------------------------- ปุ่มควบคุม -- */
+.playback {
+  display: flex; align-items: center; gap: 8px; height: 44px;
+  padding: 0 4px; margin-top: 4px;
+}
+.counter {
+  font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted);
+  min-width: 62px; text-align: center;
+}
+.counter i { opacity: .5; font-style: normal; }
+
+.toggle {
+  display: flex; align-items: center; gap: 7px; padding: 0 12px; font-size: 13px;
+  white-space: nowrap;
+}
+.toggle.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.toggle input { accent-color: var(--accent); margin: 0; }
+
+/* ------------------------------------------------------------ คำวิเคราะห์ -- */
+.side { display: flex; flex-direction: column; gap: 16px; }
+.card { padding: 16px 18px; }
+
+/* ความสูงตายตัว + เลื่อนข้างใน เพราะจำนวนบรรทัดคำอธิบายเปลี่ยนทุกตา
+   ถ้าปล่อยให้สูงตามเนื้อหา กล่องข้างล่างจะเด้งขึ้นลงทุกครั้งที่เดิน */
+.analysis { height: 304px; overflow-y: auto; }
+
+.card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.card-head h2 { margin: 0; font-size: 15.5px; font-weight: 600; }
+.move-big {
+  margin-left: auto; font-family: var(--mono); font-size: 14px; font-weight: 600;
+  padding: 3px 10px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip {
+  font-size: 12px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+  white-space: nowrap;
+}
+.chip.good { background: var(--good-soft); border-color: transparent; color: var(--good); font-weight: 600; }
+.chip.danger { background: var(--danger-soft); border-color: transparent; color: var(--danger); font-weight: 600; }
+.chip.gold { background: var(--gold-soft); border-color: transparent; color: var(--gold); font-weight: 600; }
+.chip.warn { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+
+.notes { margin: 0; padding: 0; list-style: none; }
+.notes li {
+  position: relative; padding-left: 16px; margin-bottom: 8px; font-size: 13.5px;
+}
+.notes li::before {
+  content: ''; position: absolute; left: 2px; top: 9px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--border-2);
+}
+
+.alts { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.alts h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.alt-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.alt {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px;
+  border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.alt code { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+.empty { display: grid; place-content: center; justify-items: center; height: 100%; text-align: center; }
+.empty-mark { font-size: 34px; color: var(--border-2); }
+.empty h2 { margin: 10px 0 6px; font-size: 15.5px; }
+.empty p { margin: 0; max-width: 34em; color: var(--muted); font-size: 13.5px; }
+.empty b { color: var(--text); }
+.kbd-hint { margin-top: 14px !important; }
+kbd {
+  font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 5px;
+  background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+}
+
+/* --------------------------------------------------------- ลำดับตาเดิน -- */
+.moves { padding: 12px 12px 14px; }
+.moves-head, .moves-row { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items: center; }
+.moves-head {
+  font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .02em;
+  padding: 0 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.moves-body { height: 236px; overflow-y: auto; padding: 0 2px; }
+.moves-row { padding: 1px 0; }
+.moves-row .no {
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  text-align: right; padding-right: 4px; font-variant-numeric: tabular-nums;
+}
+.mv {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  font: inherit; color: var(--text); text-align: left;
+  background: transparent; border: 1px solid transparent; border-radius: 7px;
+  padding: 3px 8px; cursor: pointer;
+  transition: background .1s ease;
+}
+.mv:hover { background: var(--surface-2); }
+.mv.sel { background: var(--accent-soft); border-color: var(--accent); }
+.mv code { font-family: var(--mono); font-size: 12.5px; }
+.mv.blank { height: 28px; }
+.tag { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 5px; }
+.tag.danger { background: var(--danger-soft); color: var(--danger); }
+.tag.gold { background: var(--gold-soft); color: var(--gold); }
+.muted { color: var(--muted); }
+.pad { padding: 8px 6px; font-size: 13px; }
