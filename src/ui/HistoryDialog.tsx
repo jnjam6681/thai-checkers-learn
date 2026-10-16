@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { replayPlies } from '../engine/match'
 import {
-  MAX_RECORDS,
   deleteRecord,
   listRecords,
   parseRecords,
   recordFileName,
+  recordsStatus,
   saveRecord,
   subscribeRecords,
   type MatchRecord,
@@ -42,6 +42,7 @@ function download(name: string, data: unknown): void {
  */
 export function HistoryDialog({ open, onClose, onOpenRecord, viewingId, gameLive }: Props) {
   const records = useSyncExternalStore(subscribeRecords, listRecords)
+  const store = useSyncExternalStore(subscribeRecords, recordsStatus)
   const ref = useRef<HTMLDialogElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [msg, setMsg] = useState<{ kind: 'error' | 'ok'; text: string } | null>(null)
@@ -121,15 +122,21 @@ export function HistoryDialog({ open, onClose, onOpenRecord, viewingId, gameLive
       </div>
 
       <p className="history-note">
-        ทุกเกมบันทึกเองอัตโนมัติทีละตา เก็บในเบราว์เซอร์นี้ (สูงสุด {MAX_RECORDS} เกม) เปิดดูได้โดยไม่ต้องต่อ
-        hosbase ไม่ใช้โควตา — จะย้ายเครื่องให้ส่งออกเป็นไฟล์
+        ทุกเกมบันทึกเองอัตโนมัติทีละตา เป็นไฟล์ในโฟลเดอร์ <code>records/</code> ของโปรเจกต์ เกมละไฟล์
+        เปิดดูได้โดยไม่ต้องต่อ hosbase ไม่ใช้โควตา
         {gameLive && <b> · การเปิดดูจะหยุดเกมที่กำลังเล่นอยู่</b>}
       </p>
+
+      {store.state === 'error' && <p className="history-msg error">{store.message}</p>}
 
       {msg && <p className={`history-msg ${msg.kind}`}>{msg.text}</p>}
 
       <div className="history-list">
-        {records.length === 0 && <p className="muted pad">ยังไม่มีเกมที่บันทึกไว้ — เล่นสักเกมแล้วจะขึ้นที่นี่</p>}
+        {records.length === 0 && (
+          <p className="muted pad">
+            {store.state === 'loading' ? 'กำลังโหลด…' : 'ยังไม่มีเกมที่บันทึกไว้ — เล่นสักเกมแล้วจะขึ้นที่นี่'}
+          </p>
+        )}
         {records.map((r) => (
           <div className={`history-row ${r.id === viewingId ? 'sel' : ''}`} key={r.id}>
             <div className="history-info">

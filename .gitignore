@@ -3,3 +3,5 @@ dist
 .DS_Store
 *.local
 *.tsbuildinfo
+# บันทึกเกมของแต่ละเครื่อง (ดู records-server.ts)
+records/

@@ -17,7 +17,7 @@ Object.assign(globalThis, {
 })
 
 const { Match, NO_PROGRESS_LIMIT } = await import('../src/engine/match')
-const { listRecords, parseRecords, MAX_RECORDS } = await import('../src/engine/records')
+const { listRecords, parseRecords } = await import('../src/engine/records')
 const { BLACK, Board, WHITE, other } = await import('../src/game/board')
 const { fullTurns } = await import('../src/game/turns')
 const { turnForResult } = await import('../src/game/turns')
@@ -112,7 +112,7 @@ for (let g = 0; g < GAMES; g++) {
   })
 }
 
-if (listRecords().length !== Math.min(GAMES, MAX_RECORDS)) throw new Error('จำนวนบันทึกไม่ตรง')
+if (listRecords().length !== GAMES) throw new Error('จำนวนบันทึกไม่ตรง')
 const bad = JSON.parse(JSON.stringify(listRecords()[0]))
 bad.moves[0] = [0, 31]
 let rejected = false

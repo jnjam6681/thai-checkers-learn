@@ -1,54 +1,47 @@
 /**
- * บันทึกเกมที่เล่นไปแล้ว ไว้เปิดดูย้อนหลังโดยไม่ต้องต่อ hosbase
+ * ที่เก็บบันทึกเกมฝั่งเบราว์เซอร์ — ตัวจริงเป็นไฟล์ในโฟลเดอร์ records/ ของ
+ * โปรเจกต์ เขียนผ่าน /api/records ของ dev server (ดู records-server.ts)
  *
- * เก็บแค่ "ตาเดินล้วนๆ" (เส้นทางของแต่ละตา ในพิกัดของกระดานที่เห็นบนจอ
- * ซึ่งมิเรอร์แล้ว) ไม่เก็บคำวิเคราะห์ เพราะคำวิเคราะห์อ่านออกจากกระดานได้
- * ทั้งหมด ตอนเปิดดูก็แค่เล่นไล่ใหม่ (ดู `replayPlies` ใน match.ts) — บันทึก
- * หนึ่งเกมจึงเหลือไม่กี่ KB และตรวจได้ด้วยว่าทุกตาถูกกติกาจริง
+ * React อ่านจาก `cache` ในหน่วยความจำแบบ synchronous การเขียนอัปเดต cache
+ * ทันทีแล้วค่อยส่งไปเขียนไฟล์ตามหลัง เรียงคิวทีละคำขอ — บันทึกเกมเดียวกันถูก
+ * เขียนทุกตา ถ้ายิงพร้อมกันแล้วตัวเก่าไปถึงทีหลัง ไฟล์จะย้อนกลับไปตาก่อนหน้า
  *
- * ที่เก็บคือ localStorage ของเบราว์เซอร์ อยู่เครื่องเดียว ถ้าจะย้ายเครื่อง
- * ใช้ปุ่มส่งออก/นำเข้าไฟล์ .json แทน
+ * นอกเบราว์เซอร์ (เทสต์) ไม่มี server ให้คุย เก็บในหน่วยความจำอย่างเดียว
  */
 
-import { BLACK, SIZE, WHITE, type Side } from '../game/board'
+import { isRecord, type MatchRecord } from './record-format'
 
-export interface MatchRecord {
-  v: 1
-  id: string
-  startedAt: number
-  updatedAt: number
-  firstMover: Side
-  /** เส้นทางของแต่ละตา: [จาก, กลาง..., ถึง] */
-  moves: number[][]
-  /** null = เกมยังไม่จบตอนบันทึกล่าสุด (เช่นปิดหน้าไปกลางเกม) */
-  result: string | null
-}
+export { newRecordId, parseRecords, recordFileName, type MatchRecord } from './record-format'
 
-const STORE_KEY = 'makhos.records.v1'
-/** เก่ากว่านี้ทิ้ง กันพื้นที่ localStorage เต็ม (เกมยาวๆ ก็แค่ราวๆ 2 KB) */
-export const MAX_RECORDS = 200
+const API = '/api/records'
+/** ที่เก็บเดิมก่อนย้ายมาเป็นไฟล์ — เจอแล้วย้ายขึ้นไฟล์ให้ครั้งเดียว */
+const LEGACY_KEY = 'makhos.records.v1'
 
-let cache: MatchRecord[] | null = null
+/**
+ * `loading` ยังโหลดรายการไม่เสร็จ, `ok` เขียนไฟล์ได้, `error` คุยกับ server
+ * ไม่ได้ (เช่นเปิดไฟล์จาก dist ตรงๆ) — เกมที่เล่นตอนนี้จะอยู่แค่ในหน้านี้
+ */
+export type StoreStatus = { state: 'loading' | 'ok' } | { state: 'error'; message: string }
+
+let cache: MatchRecord[] = []
+let status: StoreStatus = { state: 'loading' }
 const listeners = new Set<() => void>()
+const inBrowser = typeof window !== 'undefined'
 
-function load(): MatchRecord[] {
-  try {
-    const raw = localStorage.getItem(STORE_KEY)
-    const arr: unknown = raw ? JSON.parse(raw) : []
-    return Array.isArray(arr) ? arr.filter(isRecord) : []
-  } catch {
-    return []
-  }
+const byNewest = (a: MatchRecord, b: MatchRecord) => b.startedAt - a.startedAt
+
+function emit(): void {
+  for (const fn of listeners) fn()
 }
 
-function persist(list: MatchRecord[]): void {
-  cache = list
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(list))
-  } catch {
-    /* โหมดส่วนตัวหรือพื้นที่เต็ม — ยังดูได้จนกว่าจะปิดหน้า */
-  }
-  for (const fn of listeners) fn()
+function setCache(list: MatchRecord[]): void {
+  cache = list.sort(byNewest)
+  emit()
+}
+
+function setStatus(s: StoreStatus): void {
+  status = s
+  emit()
 }
 
 // ---------- ให้ React อ่าน ----------
@@ -59,62 +52,92 @@ export const subscribeRecords = (fn: () => void): (() => void) => {
 }
 
 /** ใหม่สุดก่อน — คืน array ตัวเดิมจนกว่าจะมีการเขียน (useSyncExternalStore ต้องการแบบนี้) */
-export const listRecords = (): MatchRecord[] => (cache ??= load())
+export const listRecords = (): MatchRecord[] => cache
+
+export const recordsStatus = (): StoreStatus => status
+
+// ---------- คุยกับ server ----------
+
+let queue: Promise<unknown> = Promise.resolve()
+
+/** เข้าคิวเรียงกันทีละคำขอ ผิดพลาดก็ไปต่อคำขอถัดไปได้ */
+function enqueue(job: () => Promise<void>): Promise<void> {
+  const run = queue.then(job).then(
+    () => {
+      if (status.state === 'error') setStatus({ state: 'ok' })
+    },
+    (e: unknown) => setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) }),
+  )
+  queue = run
+  return run
+}
+
+async function request(method: string, id?: string, body?: unknown): Promise<Response> {
+  const res = await fetch(id ? `${API}/${encodeURIComponent(id)}` : API, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) throw new Error(`เขียนไฟล์บันทึกไม่ได้ (${res.status} ${await res.text()})`)
+  return res
+}
+
+const put = (rec: MatchRecord) => enqueue(async () => void (await request('PUT', rec.id, rec)))
+
+async function init(): Promise<void> {
+  try {
+    const res = await request('GET')
+    const data: unknown = await res.json()
+    const onDisk = Array.isArray(data) ? data.filter(isRecord) : []
+    // เกมที่บันทึกระหว่างรอโหลด (ใน cache) ใหม่กว่าของบนดิสก์เสมอ
+    const merged = new Map(onDisk.map((r) => [r.id, r]))
+    for (const r of cache) merged.set(r.id, r)
+    const legacy = readLegacy()
+    for (const r of legacy) {
+      if (!merged.has(r.id)) {
+        merged.set(r.id, r)
+        void put(r)
+      }
+    }
+    setCache([...merged.values()])
+    setStatus({ state: 'ok' })
+    // ลบของเดิมเมื่อทุกเกมขึ้นไฟล์ได้แล้วเท่านั้น
+    if (legacy.length) {
+      void queue.then(() => {
+        if (status.state === 'ok') localStorage.removeItem(LEGACY_KEY)
+      })
+    }
+  } catch (e) {
+    setStatus({
+      state: 'error',
+      message:
+        'ติดต่อ server ไม่ได้ บันทึกลงไฟล์ไม่ได้ — ต้องเปิดผ่าน npm run dev หรือ npm run preview ' +
+        `(${e instanceof Error ? e.message : String(e)})`,
+    })
+  }
+}
+
+function readLegacy(): MatchRecord[] {
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY)
+    const arr: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter(isRecord) : []
+  } catch {
+    return []
+  }
+}
+
+if (inBrowser) void init()
+else status = { state: 'ok' }
 
 // ---------- เขียน ----------
 
 export function saveRecord(rec: MatchRecord): void {
-  const rest = listRecords().filter((r) => r.id !== rec.id)
-  persist([rec, ...rest].sort((a, b) => b.startedAt - a.startedAt).slice(0, MAX_RECORDS))
+  setCache([rec, ...cache.filter((r) => r.id !== rec.id)])
+  if (inBrowser) void put(rec)
 }
 
 export function deleteRecord(id: string): void {
-  persist(listRecords().filter((r) => r.id !== id))
-}
-
-export const newRecordId = () =>
-  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-
-// ---------- ไฟล์ ----------
-
-export function recordFileName(rec: MatchRecord): string {
-  const d = new Date(rec.startedAt)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `makhos-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`
-}
-
-/**
- * อ่านไฟล์ที่ส่งออกไป — รับได้ทั้งเกมเดียวและ array หลายเกม
- * ตรวจแค่รูปร่างตรงนี้ ส่วนความถูกกติกาของแต่ละตาไปตรวจตอนเล่นไล่ใหม่
- */
-export function parseRecords(json: string): MatchRecord[] {
-  let data: unknown
-  try {
-    data = JSON.parse(json)
-  } catch {
-    throw new Error('ไฟล์นี้ไม่ใช่ JSON')
-  }
-  const list = Array.isArray(data) ? data : [data]
-  if (!list.length || !list.every(isRecord)) throw new Error('ไฟล์นี้ไม่ใช่บันทึกเกมหมากฮอสของแอปนี้')
-  return list
-}
-
-function isRecord(x: unknown): x is MatchRecord {
-  if (typeof x !== 'object' || x === null) return false
-  const r = x as Record<string, unknown>
-  return (
-    r.v === 1 &&
-    typeof r.id === 'string' &&
-    typeof r.startedAt === 'number' &&
-    typeof r.updatedAt === 'number' &&
-    (r.firstMover === BLACK || r.firstMover === WHITE) &&
-    (r.result === null || typeof r.result === 'string') &&
-    Array.isArray(r.moves) &&
-    r.moves.every(
-      (m) =>
-        Array.isArray(m) &&
-        m.length >= 2 &&
-        m.every((i) => Number.isInteger(i) && i >= 0 && i < SIZE),
-    )
-  )
+  setCache(cache.filter((r) => r.id !== id))
+  if (inBrowser) void enqueue(async () => void (await request('DELETE', id)))
 }
