@@ -5,6 +5,8 @@ import { BLACK, SIZE, WHITE, other, type Side } from './game/board'
 import { pathName, squareName } from './game/notation'
 import { sideName } from './game/analyze'
 import { MAX_PER_HOUR } from './engine/hosbase'
+import { listRecords, subscribeRecords, type MatchRecord } from './engine/records'
+import { HistoryDialog, formatWhen } from './ui/HistoryDialog'
 
 const match = new Match()
 
@@ -28,12 +30,15 @@ export default function App() {
   const [auto, setAuto] = useState(false)
   const [delay, setDelay] = useState(3000)
   const [firstMover, setFirstMover] = useState<Side>(BLACK)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const records = useSyncExternalStore(subscribeRecords, listRecords)
 
   const ply = state.viewIndex >= 0 ? state.plies[state.viewIndex] : null
   const text = match.textAt(state.viewIndex)
   const a = ply?.analysis ?? null
   const busy = state.phase === 'connecting' || state.phase === 'thinking'
   const gameLive = busy || state.phase === 'ready'
+  const replay = state.phase === 'replay'
 
   /**
    * เกมของ hosbase เปิดแล้วเปลี่ยนฝ่ายที่เดินก่อนกลางคันไม่ได้ ถ้ากำลังเล่นอยู่
@@ -49,6 +54,17 @@ export default function App() {
   const atLive = state.viewIndex >= live
   const started = state.phase !== 'idle'
   const canStep = !busy && (!atLive || state.phase === 'ready')
+  // ดูย้อนหลังก็เล่นเองได้ แค่หยุดเมื่อถึงตาสุดท้ายของบันทึก
+  const canAuto = state.phase === 'ready' || (replay && !atLive)
+
+  const openRecord = (rec: MatchRecord): string | null => {
+    try {
+      match.openRecord(rec)
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }
 
   const step = useCallback(() => {
     if (canStep) void match.next()
@@ -56,15 +72,16 @@ export default function App() {
 
   // เล่นเอง: ตั้งเวลาใหม่ทีละรอบ ไม่ใช่ setInterval — จะได้ไม่มีทางยิงซ้อน
   useEffect(() => {
-    if (!auto || state.phase !== 'ready') return
+    if (!auto || !canAuto) return
     const t = window.setTimeout(() => void match.next(), delay)
     return () => window.clearTimeout(t)
-  }, [auto, delay, state.phase, state.plies.length, state.viewIndex])
+  }, [auto, canAuto, delay, state.plies.length, state.viewIndex])
 
   // ลูกศรซ้าย/ขวาและ space เดินหน้าถอยหลังได้เลย
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && /input|select|textarea/i.test(e.target.tagName)) return
+      if (historyOpen) return
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
         step()
@@ -76,7 +93,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [step])
+  }, [step, historyOpen])
 
   // เลื่อนเฉพาะกล่อง log เอง — scrollIntoView จะลากทั้งหน้าตามไปด้วยถ้ากล่อง
   // อยู่ใต้ขอบจอ กลายเป็นหน้ากระโดดทุกครั้งที่เดิน
@@ -151,12 +168,23 @@ export default function App() {
           ))}
         </div>
 
+        <button className="btn" onClick={() => setHistoryOpen(true)} disabled={busy} title="ดูเกมที่บันทึกไว้ย้อนหลัง">
+          บันทึกเกม <span className="count">{records.length}</span>
+        </button>
+
         <div className="spacer" />
 
-        {started && state.phase !== 'over' && (
-          <button className="btn ghost" onClick={() => match.stop()}>
-            หยุด
+        {replay ? (
+          <button className="btn ghost" onClick={() => match.closeReplay()}>
+            ปิดบันทึก
           </button>
+        ) : (
+          started &&
+          state.phase !== 'over' && (
+            <button className="btn ghost" onClick={() => match.stop()}>
+              หยุด
+            </button>
+          )
         )}
       </div>
 
@@ -217,6 +245,7 @@ export default function App() {
               {state.error ?? state.result ?? state.message}
             </span>
             <span className="status-meta">
+              {state.replay && `ย้อนหลัง ${formatWhen(state.replay.startedAt)} · `}
               {started && `ฝ่าย${sideName(state.firstMover)}เดินก่อน · `}
               เดินแล้ว {state.plies.length} ตา
               {state.noProgress > 0 && ` · นิ่ง ${state.noProgress} ตา`}
@@ -279,11 +308,18 @@ export default function App() {
                 <span className="empty-mark" aria-hidden>
                   ⬖
                 </span>
-                <h2>ยังไม่มีตาเดิน</h2>
+                <h2>{replay ? 'ตำแหน่งเริ่มเกม' : 'ยังไม่มีตาเดิน'}</h2>
+                {replay ? (
+                  <p>
+                    กำลังดูเกมที่บันทึกไว้ {state.plies.length} ตา กด <b>▶</b> ทีละตา หรือเปิด <b>เล่นเอง</b>{' '}
+                    ให้เดินต่อไปเรื่อยๆ — ไม่ต่อ hosbase ไม่ใช้โควตา
+                  </p>
+                ) : (
                 <p>
                   กด <b>เริ่มเกม</b> แล้วกด <b>▶</b> ทีละตา ระบบจะสรุปว่าตานั้นเกิดอะไรขึ้นบนกระดาน —
                   บังคับไหม กินอะไร อีกฝ่ายถูกบังคับให้กินอะไรต่อ และตานั้นมีอะไรให้เลือกอีกบ้าง
                 </p>
+                )}
                 <p className="kbd-hint">
                   <kbd>←</kbd> <kbd>→</kbd> เดินหน้าถอยหลังได้จากคีย์บอร์ด
                 </p>
@@ -310,6 +346,14 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      <HistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onOpenRecord={openRecord}
+        viewingId={state.replay?.id ?? null}
+        gameLive={gameLive}
+      />
     </div>
   )
 }

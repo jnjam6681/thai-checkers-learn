@@ -17,6 +17,7 @@ Object.assign(globalThis, {
 })
 
 const { Match, NO_PROGRESS_LIMIT } = await import('../src/engine/match')
+const { listRecords, parseRecords, MAX_RECORDS } = await import('../src/engine/records')
 const { BLACK, Board, WHITE, other } = await import('../src/game/board')
 const { fullTurns } = await import('../src/game/turns')
 const { turnForResult } = await import('../src/game/turns')
@@ -91,7 +92,36 @@ for (let g = 0; g < GAMES; g++) {
     b.applyMoveSequence(p.turn.path)
   }
   if (s.noProgress > NO_PROGRESS_LIMIT) throw new Error('ตัวนับไม่มีความคืบหน้าเลยเพดาน')
+
+  // เกมต้องถูกบันทึกครบทุกตาพร้อมผลแพ้ชนะ และผ่านไฟล์ส่งออกแล้วเปิดดูย้อนหลังได้ตรงเป๊ะ
+  const rec = listRecords()[0]
+  if (!rec || rec.moves.length !== s.plies.length || rec.result !== s.result) {
+    throw new Error(`เกมที่ ${g + 1} บันทึกไม่ครบ`)
+  }
+  const [loaded] = parseRecords(JSON.stringify(rec))
+  const viewer = new Match((side) => new FakeEngine(side))
+  viewer.openRecord(loaded)
+  const v = viewer.snapshot()
+  if (v.phase !== 'replay' || v.noProgress !== s.noProgress) throw new Error(`เกมที่ ${g + 1} เปิดย้อนหลังไม่ได้`)
+  if (viewer.textAt(-1) !== m.textAt(-1)) throw new Error(`เกมที่ ${g + 1} ตำแหน่งเริ่มไม่ตรง`)
+  v.plies.forEach((p, i) => {
+    const o = s.plies[i]
+    if (p.turn.text !== o.turn.text || p.analysis.notes.join() !== o.analysis.notes.join()) {
+      throw new Error(`เกมที่ ${g + 1} ตา ${i + 1} ย้อนหลังไม่ตรงกับตอนเล่น`)
+    }
+  })
 }
+
+if (listRecords().length !== Math.min(GAMES, MAX_RECORDS)) throw new Error('จำนวนบันทึกไม่ตรง')
+const bad = JSON.parse(JSON.stringify(listRecords()[0]))
+bad.moves[0] = [0, 31]
+let rejected = false
+try {
+  new Match().openRecord(bad)
+} catch {
+  rejected = true
+}
+if (!rejected) throw new Error('บันทึกที่มีตาผิดกติกาต้องเปิดไม่ได้')
 
 if (maxNoProgress === 0) throw new Error('ตัวนับ noProgress ไม่เคยขยับเลย')
 console.log(

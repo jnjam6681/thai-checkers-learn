@@ -17,7 +17,8 @@
 import { BLACK, Board, INITIAL, WHITE, other, type Side } from '../game/board'
 import { analyzeMove, sideName, type MoveAnalysis } from '../game/analyze'
 import { flipSquare, mirrorText, mirrorTurn } from '../game/mirror'
-import type { Turn } from '../game/turns'
+import { fullTurns, type Turn } from '../game/turns'
+import { pathName } from '../game/notation'
 import {
   HosbaseEngine,
   NEW_AS_BLACK,
@@ -27,6 +28,7 @@ import {
   type EngineLike,
   type EngineMove,
 } from './hosbase'
+import { newRecordId, saveRecord, type MatchRecord } from './records'
 
 export interface Ply {
   n: number
@@ -36,7 +38,8 @@ export interface Ply {
   analysis: MoveAnalysis
 }
 
-export type Phase = 'idle' | 'connecting' | 'ready' | 'thinking' | 'over' | 'error'
+/** `replay` = เปิดดูเกมที่บันทึกไว้ ไม่มีการต่อเน็ต */
+export type Phase = 'idle' | 'connecting' | 'ready' | 'thinking' | 'over' | 'error' | 'replay'
 
 export interface MatchState {
   phase: Phase
@@ -51,6 +54,8 @@ export interface MatchState {
   noProgress: number
   /** ฝ่ายที่เดินก่อนในเกมที่กำลังเล่นอยู่ */
   firstMover: Side
+  /** บันทึกที่กำลังเปิดดูอยู่ (เฉพาะ phase `replay`) */
+  replay: MatchRecord | null
 }
 
 /**
@@ -69,6 +74,37 @@ const START: MatchState = {
   quota: 0,
   noProgress: 0,
   firstMover: BLACK,
+  replay: null,
+}
+
+function makePly(n: number, before: Board, turn: Turn): Ply {
+  return { n, side: before.side, turn, beforeText: before.text(), analysis: analyzeMove(before, turn) }
+}
+
+const progressed = (p: Ply) => p.turn.captures.length > 0 || p.analysis.promoted
+
+/**
+ * เล่นบันทึกไล่ใหม่ตั้งแต่ต้นเกม ได้คำวิเคราะห์กลับมาครบเหมือนตอนเล่นจริง
+ * และตรวจไปด้วยว่าทุกตาถูกกติกา — บันทึกที่เสียหรือถูกแก้มือจะโยน error
+ */
+export function replayPlies(firstMover: Side, moves: number[][]): { plies: Ply[]; noProgress: number } {
+  const board = new Board(firstMover === WHITE ? mirrorText(INITIAL) : INITIAL)
+  const plies: Ply[] = []
+  let noProgress = 0
+  for (const path of moves) {
+    const before = new Board(board.text())
+    const turn = fullTurns(before).find(
+      (t) => t.path.length === path.length && t.path.every((x, k) => x === path[k]),
+    )
+    if (!turn) {
+      throw new Error(`ตาที่ ${plies.length + 1} (${pathName(path, false)}) ผิดกติกา — บันทึกนี้เสีย`)
+    }
+    const ply = makePly(plies.length + 1, before, turn)
+    plies.push(ply)
+    board.applyMoveSequence(path)
+    noProgress = progressed(ply) ? 0 : noProgress + 1
+  }
+  return { plies, noProgress }
 }
 
 export class Match {
@@ -85,6 +121,9 @@ export class Match {
    * ขาวเดินก่อนจริงๆ (ดู src/game/mirror.ts)
    */
   private mirror = false
+  /** บันทึกของเกมที่กำลังเล่น — null เมื่อไม่มีเกมที่ต้องบันทึก */
+  private recordId: string | null = null
+  private startedAt = 0
 
   /** เทสต์เสียบเอนจินปลอมเข้ามาทางนี้ */
   constructor(private makeEngine: (clientSide: Side) => EngineLike = (s) => new HosbaseEngine(s)) {}
@@ -115,11 +154,15 @@ export class Match {
   /** `firstMover` มีผลตอนเริ่มเกมเท่านั้น */
   async start(firstMover: Side = BLACK): Promise<void> {
     if (this.busy) return
+    // เกมเดิมที่ยังเล่นค้างอยู่ ปิดบันทึกให้เรียบร้อยก่อนว่าหยุดกลางคัน
+    if (this.state.phase === 'ready') this.stop()
     this.busy = true
     this.stopEngines()
     this.pending = null
     this.mirror = firstMover === WHITE
     this.live = new Board(this.mirror ? mirrorText(INITIAL) : INITIAL)
+    this.recordId = newRecordId()
+    this.startedAt = Date.now()
     this.set({
       ...START,
       firstMover,
@@ -158,6 +201,56 @@ export class Match {
       message: 'ปิดการเชื่อมต่อแล้ว',
       result: this.state.result ?? 'หยุดกลางคัน',
     })
+    this.record()
+  }
+
+  // ---------- บันทึก / ดูย้อนหลัง ----------
+
+  /**
+   * เขียนเกมที่กำลังเล่นลงบันทึก — เรียกทุกตาที่เดิน และตอนจบ/หยุด/พัง
+   * ปิดหน้าไปกลางเกมก็ยังมีบันทึกถึงตาล่าสุด
+   */
+  private record(): void {
+    const s = this.state
+    if (!this.recordId || s.plies.length === 0) return
+    saveRecord({
+      v: 1,
+      id: this.recordId,
+      startedAt: this.startedAt,
+      updatedAt: Date.now(),
+      firstMover: s.firstMover,
+      moves: s.plies.map((p) => p.turn.path),
+      result: s.result ?? (s.error ? `หยุดเพราะข้อผิดพลาด — ${s.error}` : null),
+    })
+  }
+
+  /**
+   * เปิดดูเกมที่บันทึกไว้ ถ้ามีเกมเล่นอยู่จะถูกหยุด (เกมนั้นบันทึกไว้แล้ว
+   * แต่เล่นต่อไม่ได้ เพราะเกมฝั่ง hosbase ปิดไปแล้ว) โยน error ถ้าบันทึกเสีย
+   */
+  openRecord(rec: MatchRecord): void {
+    if (this.busy) return
+    const { plies, noProgress } = replayPlies(rec.firstMover, rec.moves)
+    if (this.state.phase === 'ready') this.stop()
+    this.stopEngines()
+    this.pending = null
+    this.recordId = null
+    this.set({
+      ...START,
+      phase: 'replay',
+      plies,
+      viewIndex: -1,
+      noProgress,
+      firstMover: rec.firstMover,
+      replay: rec,
+      result: rec.result ?? 'เกมนี้ยังไม่จบตอนบันทึก',
+      message: 'ดูย้อนหลัง',
+    })
+  }
+
+  closeReplay(): void {
+    if (this.state.phase !== 'replay') return
+    this.set({ ...START, firstMover: this.state.firstMover })
   }
 
   private stopEngines(): void {
@@ -231,27 +324,18 @@ export class Match {
         throw new Error('กระดานของเรากับของเอนจินไม่ตรงกันแล้ว — หยุดก่อนจะเดินผิด')
       }
 
-      const before = new Board(this.live.text())
-      const analysis = analyzeMove(before, turn)
+      const ply = makePly(this.state.plies.length + 1, new Board(this.live.text()), turn)
       this.live.applyMoveSequence(turn.path)
 
-      const progressed = turn.captures.length > 0 || analysis.promoted
-      const ply: Ply = {
-        n: this.state.plies.length + 1,
-        side: before.side,
-        turn,
-        beforeText: before.text(),
-        analysis,
-      }
       const plies = [...this.state.plies, ply]
       this.set({
         phase: 'ready',
         plies,
         viewIndex: plies.length - 1,
-        noProgress: progressed ? 0 : this.state.noProgress + 1,
+        noProgress: progressed(ply) ? 0 : this.state.noProgress + 1,
         message: 'พร้อม — กด ▶ เพื่อดูตาถัดไป',
       })
-      this.finished()
+      if (!this.finished()) this.record()
     } catch (e) {
       this.fail(e)
     } finally {
@@ -284,11 +368,13 @@ export class Match {
   private over(result: string): void {
     this.stopEngines()
     this.set({ phase: 'over', result, message: 'จบเกม' })
+    this.record()
   }
 
   private fail(e: unknown): void {
     const msg = e instanceof Error ? e.message : String(e)
     this.stopEngines()
     this.set({ phase: 'error', error: msg, message: 'เกิดข้อผิดพลาด' })
+    this.record()
   }
 }
